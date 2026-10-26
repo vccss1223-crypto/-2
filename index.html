@@ -627,6 +627,22 @@ button.ddebt:active{opacity:.85}
 .dl b{font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dl small{font-size:12.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dl .mono{color:var(--danger);font-weight:600;font-size:14px;white-space:nowrap}
+
+/* наличие */
+.cnt{flex-wrap:wrap}
+.cnt-b{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end}
+.tg.ed[aria-pressed=true]{background:var(--btn);color:var(--btnfg);border-color:var(--btn)}
+.tg.ed::before{display:none}
+.sw{grid-area:ad;justify-self:end;align-self:center;min-width:64px;height:40px;padding:0 12px;border-radius:20px;border:1.5px solid var(--ok);color:var(--ok);font-weight:700;font-size:14px;background:var(--surface)}
+.sw.na{border-color:var(--danger);color:var(--danger)}
+.sw:active{transform:scale(.96)}
+.it.ord .sw{grid-area:ad}
+.chg{color:var(--focus);font-weight:600}
+.stk-s{font-size:17px;white-space:nowrap}
+.stk-s.ok{color:var(--ok)}
+.stk-s.na{color:var(--danger)}
+.zc-e{margin-top:10px;min-height:40px;font-weight:600;font-size:14px;color:var(--focus);text-decoration:underline;text-underline-offset:3px}
+.stk-l small{display:block}
 </style>
 
 <div id="top" class="top"></div>
@@ -691,7 +707,7 @@ var WH_CNT = [0,0,0,0]; CAT.forEach(function(i){ WH_CNT[i.wh]++; });
 
 /* ---------- состояние и память ---------- */
 var KEY = 'routeprice.v1';
-var S = {stores:[], orders:{}, dlv:{}, done:{}, rem:[], seedV:0, ui:{wh:-1, cat:-1, stock:false}};
+var S = {stores:[], orders:{}, dlv:{}, done:{}, rem:[], stk:{}, seedV:0, ui:{wh:-1, cat:-1, stock:false}};
 var persist = true;
 function load(){
   try {
@@ -706,6 +722,7 @@ function load(){
         S.done = (o.done && typeof o.done === 'object') ? o.done : {};
         S.seedV = o.seedV | 0;
         S.rem = Array.isArray(o.rem) ? o.rem.map(cleanRem).filter(Boolean) : [];
+        S.stk = cleanStk(o.stk);
         if (o.ui && typeof o.ui === 'object'){ S.ui.wh = (o.ui.wh | 0) >= -1 && (o.ui.wh | 0) < 4 ? (o.ui.wh | 0) : -1; S.ui.stock = !!o.ui.stock; S.ui.cat = (o.ui.cat | 0) >= -1 && (o.ui.cat | 0) < CATS.length ? (o.ui.cat | 0) : -1; }
       }
     }
@@ -713,6 +730,7 @@ function load(){
 }
 function save(){ try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { persist = false; } }
 load();
+applyStk();
 
 var calc = {};          // быстрый расчёт на вкладке «Прайс» (не сохраняется)
 var ctx = {kind:'calc'};
@@ -1285,6 +1303,7 @@ function rowHtml(it, mode){
   meta.push('стр. ' + it.page);
   if (it.box) meta.push('в кор. ' + it.box);
   if (mode === 'cat' && it.sec) meta.push(esc(it.sec));
+  if (S.stk[it.n]) meta.unshift('<span class="chg">ваша правка</span>');
   var vol = it.vol != null ? '<span class="vol">' + fmtVol(it.vol) + '&nbsp;л</span>' : '';
   var h = '<div class="it w' + it.wh + (oos ? ' oos' : '') + (mode === 'ord' ? ' ord' : '') + '" data-row="' + it.n + '">' +
     (it.img >= 0 ? '<button class="th i' + it.img + '" data-act="zoom" data-id="' + it.n + '" aria-label="Увеличить фото: ' + esc(it.name) + '"></button>' : '<span class="th no" aria-hidden="true"></span>') +
@@ -1295,6 +1314,7 @@ function rowHtml(it, mode){
   else if (mode === 'ord') pr = '<div class="pr">' + money(it.price * q) + cur + '</div>';
   else pr = '<div class="pr">' + money(it.price) + cur + '</div>';
   h += mode === 'ord' ? mt + pr : '<div class="pm">' + pr + mt + '</div>';
+  if (stEd && mode === 'cat') return h + '<button class="sw' + (oos ? ' na' : '') + '" data-act="stForm" data-id="' + it.n + '" aria-label="Наличие: ' + esc(it.name) + '">' + (oos ? 'Нет' : 'Есть') + '</button></div>';
   if (!oos && q === 0){
     h += '<button class="ad" data-act="inc" data-id="' + it.n + '" aria-label="Добавить: ' + esc(it.name) + '">' + IC.plus + '</button>';
   }
@@ -1362,7 +1382,8 @@ function search(){
 }
 function renderResults(){
   var r = search(), h = '';
-  var head = '<div class="cnt"><span>' + (query || S.ui.wh >= 0 || S.ui.stock || S.ui.cat >= 0 ? 'Найдено: ' + r.list.length : 'Всего позиций: ' + r.list.length) + '</span><button class="tg" data-act="stock" aria-pressed="' + S.ui.stock + '">Только в наличии</button></div>';
+  var head = '<div class="cnt"><span>' + (query || S.ui.wh >= 0 || S.ui.stock || S.ui.cat >= 0 ? 'Найдено: ' + r.list.length : 'Всего позиций: ' + r.list.length) + '</span><span class="cnt-b"><button class="tg" data-act="stock" aria-pressed="' + S.ui.stock + '">Только в наличии</button><button class="tg ed" data-act="stEd" aria-pressed="' + stEd + '">Править наличие</button></span></div>';
+  if (stEd) head += '<p class="note">Нажмите «Есть» или «Нет» у товара: можно поменять наличие и цену. Чтобы закончить, снова нажмите «Править наличие».</p>';
   if (r.similar) head += '<p class="note">Точных совпадений нет, показаны похожие по звучанию.</p>';
   if (!r.list.length){
     h = head + '<div class="empty"><b>Ничего не найдено</b>Попробуйте часть названия, бренд или объём, например «ром», «бакарди» или «0,7».</div>';
@@ -1414,7 +1435,9 @@ function viewMore(){
     '<button class="btn block ghost" style="margin-top:10px" data-act="seedAgain">Вернуть магазины из маршрута на неделю</button></div>';
   h += '<div class="card"><h2>Прайс</h2><p>Каталог дистрибьютора от ' + CAT_DATE + ', цены в тенге.</p><dl class="kv">' +
     WH.map(function(w, i){ return '<dt class="w' + i + '"><i></i>' + esc(w.name) + '</dt><dd>' + wc[i] + ' поз.</dd>'; }).join('') +
-    '<dt>Нет в наличии или сняты</dt><dd>' + oos + ' поз.</dd></dl></div>';
+    '<dt>Нет в наличии или сняты</dt><dd>' + oos + ' поз.</dd></dl>' +
+    (Object.keys(S.stk).length ? '<p style="margin:12px 0 10px">Ваши правки наличия и цен: ' + Object.keys(S.stk).length + ' поз.</p><button class="btn block ghost" data-act="stkList">Список правок</button>'
+      : '<p style="margin:12px 0 0">Наличие и цену можно поменять: «Прайс» → «Править наличие» или кнопка под фото товара.</p>') + '</div>';
   h += '<div class="card"><h2>Резервная копия</h2><p>Магазины, заказы, дни доставки, напоминания и отметки «был» хранятся только в этом браузере. Скопируйте копию в заметки или мессенджер, чтобы не потерять. Фото в копию не входят: сохраняйте их кнопкой «Сохранить на телефон».</p>' +
     '<button class="btn block ghost" data-act="backup">Скопировать копию</button><button class="btn block ghost" style="margin-top:10px" data-act="restoreForm">Восстановить из копии</button></div>';
   if (IS_PWA) h += '<div class="card"><h2>Защита</h2><p>Пароль запоминается на этом телефоне на 30 дней. Нажмите «Заблокировать», чтобы при следующем входе снова ввести пароль.</p><button class="btn block ghost" data-act="lockApp">Заблокировать приложение</button></div>';
@@ -1500,7 +1523,7 @@ function doImport(){
   toast('Добавлено магазинов: ' + added);
   day = pickToday(); go({name:'route'}, false);
 }
-function backupText(){ return JSON.stringify({v:2, stores:S.stores, orders:S.orders, dlv:S.dlv, done:S.done, rem:S.rem}); }
+function backupText(){ return JSON.stringify({v:2, stores:S.stores, orders:S.orders, dlv:S.dlv, done:S.done, rem:S.rem, stk:S.stk}); }
 function restoreForm(){
   openSheet('<h2>Восстановить из копии</h2><p class="hint">Вставьте текст резервной копии. Текущие магазины и заказы будут заменены.</p><textarea class="ta" id="rst" placeholder="{&quot;v&quot;:2,…}"></textarea>' +
     '<div class="acts"><button class="btn" data-act="doRestore">Восстановить</button><button class="btn ghost" data-act="closeSheet">Отмена</button></div>');
@@ -1531,6 +1554,7 @@ function doRestore(){
       if (!fromIso(k) || !o.done[k] || typeof o.done[k] !== 'object') continue;
       for (var i in o.done[k]) if (findStore(i)) (S.done[k] = S.done[k] || {})[i] = 1;
     }
+    if (o.stk && typeof o.stk === 'object'){ S.stk = cleanStk(o.stk); applyStk(); }
     if (Array.isArray(o.rem)) S.rem = o.rem.map(cleanRem).filter(Boolean).map(function(r){ if (r.sid && !findStore(r.sid)) delete r.sid; return r; });
     S.seedV = SEED.v;      /* после восстановления маршрут заново не подмешивается */
     save(); closeSheet(); toast('Восстановлено'); day = pickToday(); go({name:'route'}, false);
@@ -1590,7 +1614,8 @@ function zCap(){
       '<input data-act="qty" data-id="' + it.n + '" inputmode="numeric" pattern="[0-9]*" value="' + q + '" aria-label="Количество">' +
       '<button data-act="inc" data-id="' + it.n + '" aria-label="Больше">+</button></div>';
   }
-  zcEl.className = 'zc w' + it.wh; zcEl.innerHTML = h + '</div>';
+  h += '</div><button class="zc-e" data-act="stForm" data-id="' + it.n + '">Изменить наличие или цену</button>';
+  zcEl.className = 'zc w' + it.wh; zcEl.innerHTML = h;
 }
 function openZoom(n){
   var it = BY.get(n); if (!it || it.img < 0 || !ZSIZE[it.img]) return;
@@ -1624,6 +1649,77 @@ document.addEventListener('pointerdown', function(e){   /* разбираем д
   if (!ZDATA && e.target.closest && e.target.closest('.th[data-act=zoom]')) zSrc(0);
 });
 document.addEventListener('keydown', function(e){ if (e.key === 'Escape' && !zmEl.hidden) closeZoom(false); });
+
+/* ---------- наличие и цена: свои правки поверх прайса ---------- */
+var stEd = false;
+function cleanStk(x){
+  var out = {};
+  if (!x || typeof x !== 'object') return out;
+  Object.keys(x).forEach(function(k){
+    var o = x[k], n = +k;
+    if (!BY.has(n) || !o || (o.st !== 0 && o.st !== 1)) return;
+    var r = {st:o.st};
+    if (typeof o.p === 'number' && isFinite(o.p) && o.p > 0) r.p = o.p;
+    var it = BY.get(n); if (r.st === 0 && r.p == null && (it.p0 !== undefined ? it.p0 : it.price) == null) return;   /* «есть» без цены не бывает */
+    out[n] = r;
+  });
+  return out;
+}
+function applyStk(){
+  CAT.forEach(function(it){
+    if (it.st0 === undefined){ it.st0 = it.st; it.p0 = it.price; }
+    var o = S.stk[it.n];
+    it.st = o ? o.st : it.st0;
+    it.price = o && o.p != null ? o.p : it.p0;
+  });
+}
+function stName(it){ return esc(it.name) + (it.vol != null ? ' ' + fmtVol(it.vol) + '&nbsp;л' : ''); }
+function stLabel(st){ return st === 0 ? 'В наличии' : st === 2 ? 'Снят с производства' : 'Нет в наличии'; }
+function stockForm(n){
+  var it = BY.get(n); if (!it) return;
+  var ins = it.st === 0, o = S.stk[n];
+  openSheet('<h2>' + stName(it) + '</h2><p class="hint">Склад ' + esc(WH[it.wh].name) + ' · ' + esc(CATS[it.cat]) + ' · стр. ' + it.page + '</p>' +
+    '<div class="dbt-now"><span>Сейчас</span><b class="stk-s ' + (ins ? 'ok' : 'na') + '">' + stLabel(it.st) + '</b></div>' +
+    '<label class="fld"><span>Цена, ₸</span><input id="stP" inputmode="decimal" autocomplete="off" value="' + (it.price != null ? String(it.price).replace('.', ',') : '') + '" placeholder="Цена из приложения дистрибьютора"></label>' +
+    '<p class="hint">' + (it.p0 != null ? 'В прайсе от ' + CAT_DATE + ': ' + moneyD(it.p0) + '&nbsp;₸' : 'В прайсе цены нет — впишите цену, чтобы товар можно было заказать.') + '</p>' +
+    '<p class="ferr" id="serr" role="alert" hidden></p>' +
+    '<div class="dbt-g">' + (ins
+      ? '<button class="btn danger full" data-act="stDo" data-id="' + n + '" data-k="out">Нет в наличии</button><button class="btn ghost full" data-act="stDo" data-id="' + n + '" data-k="price">Сохранить цену</button>'
+      : '<button class="btn full" data-act="stDo" data-id="' + n + '" data-k="in">Есть в наличии</button>') +
+    (o ? '<button class="btn ghost full" data-act="stDo" data-id="' + n + '" data-k="reset">Вернуть как в прайсе</button>' : '') + '</div>' +
+    '<div class="acts"><button class="btn ghost" data-act="closeSheet">Закрыть</button></div>');
+}
+function stDo(n, k){
+  var it = BY.get(n); if (!it) return;
+  var o = S.stk[n] || {}, msg;
+  if (k === 'reset'){ delete S.stk[n]; msg = 'Как в прайсе: ' + stLabel(it.st0).toLowerCase(); }
+  else if (k === 'out'){
+    var r = {st:1}; if (o.p != null) r.p = o.p;
+    if (it.st0 !== 0 && r.p == null) delete S.stk[n]; else S.stk[n] = r;
+    msg = 'Нет в наличии';
+  } else {
+    var p = parseAmt($('#stP').value), er = $('#serr');
+    if (p == null || p <= 0){ er.textContent = 'Впишите цену цифрами, например 6500'; er.hidden = false; $('#stP').focus(); return; }
+    var r2_ = {st:0}; if (p !== it.p0) r2_.p = p;
+    if (it.st0 === 0 && r2_.p == null) delete S.stk[n]; else S.stk[n] = r2_;
+    msg = k === 'in' ? 'Есть в наличии, ' + moneyD(p) + ' ₸' : 'Цена: ' + moneyD(p) + ' ₸';
+  }
+  applyStk(); save(); closeSheet(); toast(msg);
+  if (view.name === 'price' || view.name === 'pick'){ renderCats(); renderResults(); renderBar(); }
+  else if (view.name === 'store'){ renderStoreMain(); renderBar(); }
+  else render();
+}
+function stkList(){
+  var ks = Object.keys(S.stk).map(Number).filter(function(n){ return BY.has(n); });
+  ks.sort(function(a, b){ return BY.get(a).wh - BY.get(b).wh || BY.get(a).name.localeCompare(BY.get(b).name); });
+  openSheet('<h2>Ваши правки наличия</h2><p class="hint">Нажмите на товар, чтобы поменять или вернуть как в прайсе.</p>' +
+    ks.map(function(n){
+      var it = BY.get(n);
+      return '<button class="dl stk-l w' + it.wh + '" data-act="stForm" data-id="' + n + '"><span><b>' + stName(it) + '</b><small>' + esc(WH[it.wh].name) + ' · в прайсе: ' + stLabel(it.st0).toLowerCase() + '</small></span>' +
+        '<span class="stk-s ' + (it.st === 0 ? 'ok' : 'na') + '" style="font-size:14px">' + (it.st === 0 ? moneyD(it.price) + '&nbsp;₸' : 'нет') + '</span></button>';
+    }).join('') +
+    '<div class="acts"><button class="btn danger" data-act="stkReset" data-confirm="Точно вернуть всё как в прайсе?">Вернуть всё как в прайсе</button><button class="btn ghost" data-act="closeSheet">Закрыть</button></div>');
+}
 
 /* ---------- долги ---------- */
 function debtWhen(s){
@@ -1916,6 +2012,11 @@ document.addEventListener('click', function(e){
     case 'debtDo': debtDo(id, el.dataset.k); break;
     case 'debtUndo': debtUndo(id); break;
     case 'debtList': debtList(); break;
+    case 'stEd': stEd = !stEd; renderResults(); break;
+    case 'stForm': if (!zmEl.hidden) closeZoom(false); stockForm(n); break;
+    case 'stDo': stDo(n, el.dataset.k); break;
+    case 'stkList': stkList(); break;
+    case 'stkReset': S.stk = {}; applyStk(); save(); closeSheet(); toast('Наличие и цены как в прайсе'); render(); break;
     case 'pick': go({name:'pick', id:ctx.sid}, true); break;
     case 'back': back(); break;
     case 'day': day = id; render(); window.scrollTo(0, 0); break;
