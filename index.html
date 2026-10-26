@@ -606,6 +606,27 @@ select{font:inherit;color:inherit;margin:0}
 .ferr{margin:0 0 10px;padding:9px 12px;border-radius:10px;background:var(--w1t);color:var(--danger);font-size:14px;font-weight:600}
 .rem-e{margin-bottom:12px;padding:20px 14px}
 .note .acts{margin-top:10px}
+
+/* долги */
+button.ddebt{width:100%;min-height:44px;align-items:center;text-align:left}
+button.ddebt:active{opacity:.85}
+.ddebt.none{background:var(--surface2);color:var(--muted)}
+.ddebt .ar{font-style:normal;font-size:20px;line-height:1;margin-left:4px}
+.dbt-now{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:12px;padding:10px 12px;border-radius:12px;background:var(--surface);border:1px solid var(--line)}
+.dbt-now b{font-size:22px;white-space:nowrap}
+.dbt-now.has b{color:var(--danger)}
+.dbt-g{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+.dbt-g .btn{min-width:0;padding:0 8px;font-size:15px}
+.dbt-g .full{grid-column:1/-1}
+.dbt-h{margin:14px 0 10px;padding:0;list-style:none;font-size:13.5px}
+.dbt-h li{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-top:1px solid var(--line)}
+.dbt-h li span:first-child{min-width:0;overflow-wrap:anywhere}
+.dbt-h .d{font:500 12.5px 'IBM Plex Mono',ui-monospace,monospace;color:var(--muted);white-space:nowrap}
+.dl{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;min-height:54px;margin-bottom:8px;padding:8px 12px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+.dl span:first-child{min-width:0;display:flex;flex-direction:column}
+.dl b{font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dl small{font-size:12.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dl .mono{color:var(--danger);font-weight:600;font-size:14px;white-space:nowrap}
 </style>
 
 <div id="top" class="top"></div>
@@ -796,7 +817,7 @@ function seedMerge(){
       ['ip','t','z','note','q'].forEach(function(k){ if (!ex[k] && r[k]) ex[k] = r[k]; });
       if (ex.la == null && r.la != null){ ex.la = r.la; ex.lo = r.lo; }
       if (!ex.n) ex.n = r.n;
-      if (!ex.debt) ex.debt = r.debt || 0;
+      if (!ex.debt && !ex.debtAt) ex.debt = r.debt || 0;
       if (!(ex.tags && ex.tags.length)) ex.tags = r.tags || [];
       return;
     }
@@ -1013,7 +1034,7 @@ function storeInfo(s){
   var h = '<div class="si">';
   if (s.ip) h += '<div class="si-ip">' + esc(s.ip) + '</div>';
   if (s.addr || s.t) h += '<div class="si-ad">' + [s.addr ? esc(s.addr) : '', s.t ? 'по маршруту ' + esc(s.t) : ''].filter(Boolean).join(' · ') + '</div>';
-  if (s.debt > 0) h += '<div class="ddebt"><span>Долг по таблице от 13 октября</span><span class="mono">' + moneyD(s.debt) + '&nbsp;₸</span></div>';
+  h += '<button class="ddebt' + (s.debt > 0 ? '' : ' none') + '" data-act="debtForm" data-id="' + esc(s.id) + '" aria-label="' + (s.debt > 0 ? 'Долг ' + moneyD(s.debt) + ' тенге: оплата или правка' : 'Долга нет: записать долг') + '"><span>' + (s.debt > 0 ? 'Долг ' + debtWhen(s) : 'Долга нет') + '</span><span class="mono">' + (s.debt > 0 ? moneyD(s.debt) + '&nbsp;₸' : 'Записать') + ' <i class="ar">›</i></span></button>';
   if (tags) h += '<div class="tgs">' + tags + '</div>';
   if (s.note) h += '<div class="rs-note">' + esc(s.note) + '</div>';
   h += '<div class="si-bt"><a class="btn sm2" href="' + esc(navUrl(s)) + '" target="_blank" rel="noopener">Маршрут</a>' +
@@ -1381,10 +1402,13 @@ function viewMore(){
   CAT.forEach(function(i){ wc[i.wh]++; if (i.st !== 0) oos++; });
   var h = '';
   if (!persist) h += '<p class="note warn">Память браузера недоступна: заказы пропадут после закрытия страницы. Сделайте копию вручную.</p>';
+  var dn = 0, ds = 0; S.stores.forEach(function(s){ if (s.debt > 0){ dn++; ds += s.debt; } });
   var rn = S.rem.length, rd = remDue().length;
   h += '<div class="card"><h2>Напоминания</h2><p>' + (rn ? 'Запланировано: ' + rn + (rd ? ', пора: ' + rd : '') + '.' : 'Поставьте себе напоминание: например, забить заявку в нужный день и время, с заметкой о том, что сделать.') + '</p>' +
     '<button class="btn block" data-act="remNew" data-id="">Новое напоминание</button>' +
     (rn ? '<button class="btn block ghost" style="margin-top:10px" data-act="remList" data-id="">Все напоминания</button>' : '') + '</div>';
+  h += '<div class="card"><h2>Долги</h2><p>' + (dn ? 'Записано долгов: ' + dn + ' на сумму ' + moneyD(ds) + '&nbsp;₸. ' : 'Долгов не записано. ') + 'Оплату и новый долг вносят в карточке магазина, строка «Долг».</p>' +
+    '<button class="btn block ghost" data-act="debtList">Список долгов</button></div>';
   h += '<div class="card"><h2>Магазины</h2><p>В приложении ' + S.stores.length + ' ' + pl(S.stores.length, 'магазин', 'магазина', 'магазинов') + '. Можно вставить свой список текстом или столбцами из Excel (день, магазин, адрес, ИП).</p>' +
     '<button class="btn block" data-act="importForm">Вставить список магазинов</button>' +
     '<button class="btn block ghost" style="margin-top:10px" data-act="seedAgain">Вернуть магазины из маршрута на неделю</button></div>';
@@ -1483,8 +1507,14 @@ function restoreForm(){
 }
 function cleanStore(s){
   var num = function(v){ return typeof v === 'number' && isFinite(v) ? v : undefined; };
-  return mkSeedStore({id:String(s.id), name:String(s.name), addr:String(s.addr || ''), day:normDay(String(s.day || '')), ip:String(s.ip || ''), t:String(s.t || ''), n:num(s.n) || 0, z:String(s.z || ''),
-    la:num(s.la), lo:num(s.lo), debt:num(s.debt) || 0, tags:Array.isArray(s.tags) ? s.tags.map(String) : [], note:String(s.note || ''), q:String(s.q || '')});
+  var o = mkSeedStore({id:String(s.id), name:String(s.name), addr:String(s.addr || ''), day:normDay(String(s.day || '')), ip:String(s.ip || ''), t:String(s.t || ''), n:num(s.n) || 0, z:String(s.z || ''),
+    la:num(s.la), lo:num(s.lo), debt:Math.max(0, num(s.debt) || 0), tags:Array.isArray(s.tags) ? s.tags.map(String) : [], note:String(s.note || ''), q:String(s.q || '')});
+  if (/^\d{4}-\d\d-\d\d$/.test(String(s.debtAt || ''))) o.debtAt = String(s.debtAt);
+  if (Array.isArray(s.debtLog)) o.debtLog = s.debtLog.map(function(e){
+    if (!e || !/^\d{4}-\d\d-\d\dT\d\d:\d\d$/.test(String(e.at)) || num(e.from) == null || num(e.to) == null) return null;
+    return {at:String(e.at), k:({pay:1, add:1, set:1, clr:1})[e.k] ? e.k : 'set', from:e.from, to:e.to};
+  }).filter(Boolean).slice(-10);
+  return o;
 }
 function doRestore(){
   try {
@@ -1594,6 +1624,75 @@ document.addEventListener('pointerdown', function(e){   /* разбираем д
   if (!ZDATA && e.target.closest && e.target.closest('.th[data-act=zoom]')) zSrc(0);
 });
 document.addEventListener('keydown', function(e){ if (e.key === 'Escape' && !zmEl.hidden) closeZoom(false); });
+
+/* ---------- долги ---------- */
+function debtWhen(s){
+  if (!s.debtAt) return 'по таблице от 13 октября';
+  var d = fromIso(s.debtAt); return 'на ' + (d ? d.toLocaleDateString('ru-RU', {day:'numeric', month:'long'}) : s.debtAt);
+}
+function parseAmt(v){
+  var x = String(v == null ? '' : v).replace(/[\s\u00a0₸]/g, '').replace(',', '.');
+  if (/^\d{1,3}(\.\d{3})+$/.test(x)) x = x.replace(/\./g, '');      /* 5.000 и 5,000 — это пять тысяч */
+  if (!/^\d{1,9}(\.\d{1,2})?$/.test(x)) return null;
+  return parseFloat(x);
+}
+var r2 = function(x){ return Math.round(x * 100) / 100; };
+function debtLine(e){
+  var f = moneyD(e.from), t = moneyD(e.to), a = moneyD(Math.abs(e.to - e.from)), tx;
+  if (e.k === 'clr') tx = 'Долг убран (было ' + f + ')';
+  else if (e.k === 'pay') tx = 'Оплата −' + a + (e.to > 0 ? ', осталось ' + t : ', долга нет');
+  else if (e.k === 'add') tx = 'Добавлено +' + a + ', всего ' + t;
+  else tx = 'Было ' + f + ', стало ' + t;
+  return '<li><span>' + esc(tx) + '</span><span class="d">' + esc(e.at.slice(8, 10) + '.' + e.at.slice(5, 7)) + '</span></li>';
+}
+function debtForm(id){
+  var s = findStore(id); if (!s) return;
+  var d = s.debt || 0, log = (s.debtLog || []).slice(-5).reverse();
+  openSheet('<h2>Долг · ' + esc(s.name) + '</h2>' +
+    '<div class="dbt-now' + (d > 0 ? ' has' : '') + '"><span>' + (d > 0 ? 'Сейчас долг' : 'Сейчас долга нет') + '</span><b class="mono">' + moneyD(d) + '&nbsp;₸</b></div>' +
+    '<label class="fld"><span>Сумма, ₸</span><input id="dbtA" inputmode="decimal" autocomplete="off" placeholder="Например, 5000"></label>' +
+    '<p class="ferr" id="derr" role="alert" hidden></p>' +
+    '<div class="dbt-g">' + (d > 0
+      ? '<button class="btn full" data-act="debtDo" data-id="' + esc(id) + '" data-k="pay">Принял оплату</button>' +
+        '<button class="btn ghost" data-act="debtDo" data-id="' + esc(id) + '" data-k="add">Добавить к долгу</button>' +
+        '<button class="btn ghost" data-act="debtDo" data-id="' + esc(id) + '" data-k="set">Задать сумму</button>' +
+        '<button class="btn danger full" data-act="debtDo" data-id="' + esc(id) + '" data-k="clr" data-confirm="Точно: долг оплачен полностью?">Долг оплачен полностью</button>'
+      : '<button class="btn full" data-act="debtDo" data-id="' + esc(id) + '" data-k="set">Записать долг</button>') + '</div>' +
+    (log.length ? '<ul class="dbt-h">' + log.map(debtLine).join('') + '</ul><button class="btn ghost block sm2" data-act="debtUndo" data-id="' + esc(id) + '">Отменить последнее изменение</button>' : '') +
+    '<div class="acts"><button class="btn ghost" data-act="closeSheet">Закрыть</button></div>');
+}
+function debtDo(id, k){
+  var s = findStore(id); if (!s) return;
+  var from = s.debt || 0, to, er = $('#derr');
+  if (k === 'clr') to = 0;
+  else {
+    var a = parseAmt($('#dbtA').value);
+    if (a == null || (k !== 'set' && a <= 0)){ er.textContent = 'Введите сумму цифрами, например 5000'; er.hidden = false; $('#dbtA').focus(); return; }
+    to = k === 'pay' ? Math.max(0, r2(from - a)) : k === 'add' ? r2(from + a) : r2(a);
+  }
+  if (to === from){ closeSheet(); toast('Сумма не изменилась'); return; }
+  s.debt = to; s.debtAt = isoOf(new Date());
+  (s.debtLog = s.debtLog || []).push({at:keyOf(new Date()), k:(k === 'set' && to === 0) ? 'clr' : k, from:from, to:to});
+  if (s.debtLog.length > 10) s.debtLog = s.debtLog.slice(-10);
+  save(); closeSheet(); debtAfter(id);
+  toast(to > 0 ? 'Долг: ' + moneyD(to) + ' ₸' : 'Долг убран');
+}
+function debtUndo(id){
+  var s = findStore(id), e = s && s.debtLog && s.debtLog.pop(); if (!e) return;
+  s.debt = e.from;
+  if (s.debtLog.length) s.debtAt = s.debtLog[s.debtLog.length - 1].at.slice(0, 10); else delete s.debtAt;
+  save(); closeSheet(); debtAfter(id); toast('Изменение отменено');
+}
+function debtAfter(id){ if (view.name === 'store' && view.id === id) renderStoreMain(); else render(); }
+function debtList(){
+  var l = S.stores.filter(function(s){ return s.debt > 0; }).sort(function(a, b){ return b.debt - a.debt; }), sum = 0;
+  l.forEach(function(s){ sum += s.debt; });
+  openSheet('<h2>Долги</h2><div class="dbt-now has"><span>' + l.length + ' ' + pl(l.length, 'магазин', 'магазина', 'магазинов') + '</span><b class="mono">' + moneyD(sum) + '&nbsp;₸</b></div>' +
+    (l.length ? l.map(function(s){
+      return '<button class="dl" data-act="open" data-id="' + esc(s.id) + '"><span><b>' + esc(s.name) + '</b><small>' + esc([s.day, s.ip].filter(Boolean).join(' · ')) + '</small></span><span class="mono">' + moneyD(s.debt) + '&nbsp;₸</span></button>';
+    }).join('') : '<div class="empty rem-e"><b>Долгов нет</b>Долг записывается в карточке магазина.</div>') +
+    '<div class="acts"><button class="btn ghost" data-act="closeSheet">Закрыть</button></div>');
+}
 
 /* ---------- напоминания ---------- */
 var CAN_NOTIFY = IS_PWA && ('Notification' in window) && ('serviceWorker' in navigator);
@@ -1813,6 +1912,10 @@ document.addEventListener('click', function(e){
     case 'remSnooze': remSnooze(id); break;
     case 'remPerm': remPerm(); break;
     case 'remQ': remQuick(id); break;
+    case 'debtForm': debtForm(id); break;
+    case 'debtDo': debtDo(id, el.dataset.k); break;
+    case 'debtUndo': debtUndo(id); break;
+    case 'debtList': debtList(); break;
     case 'pick': go({name:'pick', id:ctx.sid}, true); break;
     case 'back': back(); break;
     case 'day': day = id; render(); window.scrollTo(0, 0); break;
