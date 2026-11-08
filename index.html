@@ -693,6 +693,15 @@ button.ddebt:active{opacity:.85}
 .zc-x{margin-top:4px;font-size:13px;color:var(--muted);overflow-wrap:anywhere}
 .zc-p.np{font:600 15px 'IBM Plex Sans',system-ui,sans-serif;color:var(--muted)}
 .tot-np{margin-top:4px;font-size:13px;opacity:.78}
+/* пара кнопок блока */
+.bxg{display:inline-flex;height:48px;border:1.5px dashed var(--muted);border-radius:12px;overflow:hidden}
+.bxg .bx{height:100%;border:0;border-radius:0;padding:0 12px}
+.bxg .bx + .bx{border-left:1.5px dashed var(--muted)}
+
+/* вкладка «Сигареты» в маршруте */
+.dayb.cig{border-color:var(--w);color:var(--w)}
+.dayb.cig small{color:inherit;opacity:.8}
+.dayb.cig[aria-pressed=true]{background:var(--w);border-color:var(--w);color:var(--wfg)}
 </style>
 
 <div id="top" class="top"></div>
@@ -803,6 +812,8 @@ function setQty(sid, n, q){
   if (!Object.keys(o).length) delete S.orders[sid];
   save();
 }
+/* сигареты и стики (склады 4–5, в блоке 10) — только по 5 пачек; остальное поштучно */
+function stepOf(n){ var it = BY.get(n); return it && it.wh >= 4 && it.box === 10 ? 5 : 1; }
 function getQ(n){ return ctx.kind === 'store' ? qtyOf(ctx.sid, n) : (calc[n] || 0); }
 function putQ(n, q){
   if (ctx.kind === 'store') return setQty(ctx.sid, n, q);
@@ -843,7 +854,8 @@ function groupRows(list, mode){
 var DAYF = ['Понедельник','Вторник','Среда','Четверг','Пятница'], DAYSH = ['Пн','Вт','Ср','Чт','Пт'];
 var DR = [/^(пн|пон)/, /^(вт|вто)/, /^(ср|сре)/, /^(чт|чет)/, /^(пт|пят)/, /^(сб|суб)/, /^(вс|вос)/];
 function dayRank(d){ var x = String(d).trim().toLowerCase(); for (var i = 0; i < 7; i++) if (DR[i].test(x)) return i; return 100; }
-function normDay(d){ var r = dayRank(d); return r < 5 ? DAYF[r] : ''; }      /* суббота, воскресенье и всё непонятное: без дня */
+var CIGD = 'Сигареты';                                                       /* отдельный список магазинов для сигарет, не день недели */
+function normDay(d){ if (/^сиг/i.test(String(d).trim())) return CIGD; var r = dayRank(d); return r < 5 ? DAYF[r] : ''; }      /* суббота, воскресенье и всё непонятное: без дня */
 var TODAY = (new Date().getDay() + 6) % 7;                                   /* 0 = понедельник … 6 = воскресенье */
 function pickToday(){ return DAYF[TODAY < 5 ? TODAY : 0]; }
 day = pickToday();
@@ -874,6 +886,7 @@ function dlvValid(iso){
 }
 function dlvOf(sid){ var v = S.dlv[sid]; return v && dlvValid(v) ? v : dlvOptions()[0]; }
 function dayIso(dn){                      /* дата дня маршрута на текущей неделе (пн–вс): по ней хранятся отметки «пройден» */
+  if (dn === CIGD) return isoOf(new Date());   /* «Сигареты»: отметки «был» на сегодня */
   var r = DAYF.indexOf(dn); if (r < 0) r = TODAY < 5 ? TODAY : 0;
   var d = new Date(); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() + (r - TODAY) + (TODAY >= 5 ? 7 : 0)); return isoOf(d);
 }
@@ -1019,6 +1032,8 @@ function dayTabs(){
     var l = storesOf(d);
     h += '<button class="dayb' + (i === TODAY ? ' today' : '') + '" data-act="day" data-id="' + d + '" aria-pressed="' + (day === d) + '" aria-label="' + d + ', магазинов: ' + l.length + (i === TODAY ? ', сегодня' : '') + '"><b>' + DAYSH[i] + '</b><small>' + l.length + '</small></button>';
   });
+  var cg = storesOf(CIGD).length;
+  h += '<button class="dayb cig w4" data-act="day" data-id="' + CIGD + '" aria-pressed="' + (day === CIGD) + '" aria-label="Сигареты, отдельный список, магазинов: ' + cg + '"><b>Сиг.</b><small>' + cg + '</small></button>';
   var o = storesOf('').length;
   if (o) h += '<button class="dayb" data-act="day" data-id="" aria-pressed="' + (day === '') + '" aria-label="Без дня, магазинов: ' + o + '"><b>Др.</b><small>' + o + '</small></button>';
   return '<div class="days" role="group" aria-label="День недели">' + h + '</div>';
@@ -1027,7 +1042,8 @@ function viewRoute(){
   ctx = {kind:'calc'};
   fixDay();
   var list = storesOf(day), sub;
-  if (day){
+  if (day === CIGD) sub = 'Сигареты · отдельный список';
+  else if (day){
     var dt = fromIso(dayIso(day));
     sub = esc(day) + ', ' + dt.toLocaleDateString('ru-RU', {day:'numeric', month:'long'}) + (DAYF.indexOf(day) === TODAY ? ' · <b class="tflag">сегодня</b>' : '');
   } else sub = 'Магазины без дня';
@@ -1037,7 +1053,7 @@ function viewRoute(){
   if (!S.stores.length){
     h += '<div class="empty"><b>Магазинов нет</b>Верните магазины из маршрута на неделю или добавьте свои: по одному или списком. Прайс работает уже сейчас.<div class="row-btns"><button class="btn" data-act="seedAgain">Вернуть маршрут на неделю</button><button class="btn ghost" data-act="storeForm">Добавить магазин</button></div></div>';
   } else if (!list.length){
-    h += '<div class="empty"><b>В этот день магазинов нет</b>Добавьте магазин с этим днём или поменяйте день у существующего.<div class="row-btns"><button class="btn" data-act="storeForm">Добавить магазин</button></div></div>';
+    h += '<div class="empty"><b>' + (day === CIGD ? 'Магазинов для сигарет пока нет' : 'В этот день магазинов нет') + '</b>' + (day === CIGD ? 'Добавьте магазины, куда возите сигареты: кнопка «+» вверху, день маршрута «Сигареты».' : 'Добавьте магазин с этим днём или поменяйте день у существующего.') + '<div class="row-btns"><button class="btn" data-act="storeForm">Добавить магазин</button></div></div>';
   } else {
     var sum = 0, withOrder = 0, done = 0, debtN = 0, debtS = 0;
     list.forEach(function(s){
@@ -1358,7 +1374,7 @@ function rowHtml(it, mode){
   if (mode === 'ord') meta.push(it.price != null ? money(it.price) + '&nbsp;₸ × ' + q : q + ' шт');
   if (it.page) meta.push('стр. ' + it.page);
   if (it.codes.length) meta.push('код ' + it.codes[0]);
-  if (it.box) meta.push((it.wh >= 4 ? 'в блоке ' : 'в кор. ') + it.box);
+  if (it.box) meta.push((it.wh >= 4 ? 'по 5 пачек · в блоке ' : 'в кор. ') + it.box);
   if (mode === 'cat' && it.sec) meta.push(esc(it.sec));
   if (S.stk[it.n]) meta.unshift('<span class="chg">ваша правка</span>');
   var vol = it.vol != null ? '<span class="vol">' + fmtVol(it.vol) + '&nbsp;л</span>' : it.mg ? '<span class="vol mg">' + esc(it.mg) + '</span>' : '';
@@ -1380,7 +1396,8 @@ function rowHtml(it, mode){
     h += '<div class="ct"><div class="stp"><button data-act="dec" data-id="' + it.n + '" aria-label="Меньше">−</button>' +
       '<input data-act="qty" data-id="' + it.n + '" inputmode="numeric" pattern="[0-9]*" value="' + q + '" aria-label="Количество">' +
       '<button data-act="inc" data-id="' + it.n + '" aria-label="Больше">+</button></div>';
-    if (it.box && !oos) h += '<button class="bx" data-act="box" data-id="' + it.n + '">+' + (it.wh >= 4 ? 'блок ' : 'ящик ') + it.box + '</button>';
+    if (it.box && !oos && it.wh >= 4) h += '<span class="bxg"><button class="bx" data-act="boxm" data-id="' + it.n + '" aria-label="Минус блок 10 пачек">−блок ' + it.box + '</button><button class="bx" data-act="box" data-id="' + it.n + '" aria-label="Плюс блок 10 пачек">+блок ' + it.box + '</button></span>';
+    else if (it.box && !oos) h += '<button class="bx" data-act="box" data-id="' + it.n + '">+ящик ' + it.box + '</button>';
     if (mode === 'cat' && it.price != null) h += '<span class="sm">= ' + money(it.price * q) + ' ' + cur + '</span>';
     h += '</div>';
   }
@@ -1528,7 +1545,7 @@ function copyText(t, done){
 function storeForm(id){
   var s = id ? findStore(id) : null;
   var dv = s ? (s.day || '') : day;
-  var opts = '<option value=""' + (!dv ? ' selected' : '') + '>Без дня</option>' + DAYF.map(function(d){ return '<option value="' + d + '"' + (d === dv ? ' selected' : '') + '>' + d + '</option>'; }).join('');
+  var opts = '<option value=""' + (!dv ? ' selected' : '') + '>Без дня</option>' + DAYF.concat([CIGD]).map(function(d){ return '<option value="' + d + '"' + (d === dv ? ' selected' : '') + '>' + (d === CIGD ? 'Сигареты (отдельный список)' : d) + '</option>'; }).join('');
   openSheet('<h2>' + (s ? 'Магазин' : 'Новый магазин') + '</h2><form id="sf" data-id="' + esc(s ? s.id : '') + '">' +
     '<label class="fld"><span>Название</span><input name="name" required autocomplete="off" value="' + esc(s ? s.name : '') + '" placeholder="Например, Магнит"></label>' +
     '<label class="fld"><span>ИП или организация</span><input name="ip" autocomplete="off" value="' + esc(s ? s.ip || '' : '') + '" placeholder="Например, ИП Иванов А.Б."></label>' +
@@ -1550,7 +1567,7 @@ document.addEventListener('submit', function(e){
 });
 var newId = function(){ return 's' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); };
 
-var WEEK = /^(пн|вт|ср|чт|пт|сб|вс|пон|вто|сре|чет|пят|суб|вос|понедельник|вторник|среда|четверг|пятница|суббота|воскресенье)\.?$/i;
+var WEEK = /^(сигареты|пн|вт|ср|чт|пт|сб|вс|пон|вто|сре|чет|пят|суб|вос|понедельник|вторник|среда|четверг|пятница|суббота|воскресенье)\.?$/i;
 function parseStores(text){
   var out = [], cd = '';
   text.split(/\r?\n/).forEach(function(raw){
@@ -1953,7 +1970,7 @@ function remForm(id, sid){
   var nw = nextWork(), tm = new Date(); tm = new Date(tm.getFullYear(), tm.getMonth(), tm.getDate() + 1, 12);
   var nwl = isoOf(nw) === isoOf(tm) ? 'Завтра 09:00' : WDS[nw.getDay()] + ' 09:00';
   var so = '<option value="">Без магазина</option>';
-  DAYF.concat(['']).forEach(function(d){
+  DAYF.concat([CIGD, '']).forEach(function(d){
     var l = S.stores.filter(function(s){ return (s.day || '') === d; });
     if (!l.length) return;
     so += '<optgroup label="' + esc(d || 'Без дня') + '">' + l.map(function(s){
@@ -2114,9 +2131,10 @@ document.addEventListener('click', function(e){
     case 'stock': S.ui.stock = !S.ui.stock; save(); renderCats(); renderResults(); break;
     case 'cat': S.ui.cat = +id; save(); renderCats(); renderResults(); break;
     case 'clearQ': query = ''; $('#q').value = ''; renderResults(); $('#q').focus(); break;
-    case 'inc': it = BY.get(n); if (it && it.st === 0){ putQ(n, getQ(n) + 1); afterQty(n); } break;
-    case 'dec': putQ(n, getQ(n) - 1); afterQty(n); break;
-    case 'box': it = BY.get(n); if (it && it.box){ var cq = getQ(n); putQ(n, cq % it.box === 0 ? cq + it.box : Math.ceil(cq / it.box) * it.box); afterQty(n); } break;
+    case 'inc': it = BY.get(n); if (it && it.st === 0){ var sp = stepOf(n); putQ(n, Math.floor(getQ(n) / sp) * sp + sp); afterQty(n); } break;
+    case 'dec': var sd = stepOf(n); putQ(n, Math.ceil(getQ(n) / sd) * sd - sd); afterQty(n); break;
+    case 'boxm': it = BY.get(n); if (it && it.box){ putQ(n, Math.max(0, getQ(n) - it.box)); afterQty(n); } break;
+    case 'box': it = BY.get(n); if (it && it.box){ var cq = getQ(n); putQ(n, it.wh >= 4 ? cq + it.box : cq % it.box === 0 ? cq + it.box : Math.ceil(cq / it.box) * it.box); afterQty(n); } break;
     case 'resetCalc': calc = {}; renderResults(); renderBar(); break;
     case 'copy': copyText(orderText(ctx.sid, +el.dataset.w), 'Заказ скопирован'); break;
     case 'clearOrder': delete S.orders[ctx.sid]; save(); renderStoreMain(); renderBar(); break;
@@ -2129,7 +2147,7 @@ document.addEventListener('click', function(e){
 document.addEventListener('change', function(e){
   var el = e.target;
   if (el.id === 'pf'){ var f = el.files && el.files[0], sid = el.dataset.sid; el.value = ''; if (f && sid) handlePhoto(f, sid); return; }
-  if (el.matches && el.matches('input[data-act=qty]')){ var n = +el.dataset.id; putQ(n, parseInt(el.value, 10)); afterQty(n); }
+  if (el.matches && el.matches('input[data-act=qty]')){ var n = +el.dataset.id, v = parseInt(el.value, 10) || 0, sv = stepOf(n); putQ(n, Math.ceil(v / sv) * sv); afterQty(n); }
 });
 document.addEventListener('focusin', function(e){ if (e.target.matches && e.target.matches('input[data-act=qty]')) e.target.select(); });
 document.addEventListener('input', function(e){
